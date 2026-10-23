@@ -66,9 +66,10 @@ class DashboardTest extends TestCase
             ->assertJsonPath('data.total_categories', 2)
             ->assertJsonPath('data.total_products', 3)
             ->assertJsonPath('data.active_products', 2)
-            ->assertJsonPath('data.low_stock_count', 2) // stock 2 and stock 1 are both < 5
-            ->assertJsonPath('data.total_inventory_value', 520.00) // 20.00 + 500.00 (inactive excluded)
+            ->assertJsonPath('data.low_stock_count', 2)
             ->assertJsonCount(3, 'data.latest_products');
+
+        $this->assertEquals(520.00, $response->json('data.total_inventory_value'));
     }
 
     public function test_inactive_products_included_when_valuation_policy_enabled(): void
@@ -93,7 +94,7 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/dashboard/stats');
 
-        $response->assertStatus(200)
-            ->assertJsonPath('data.total_inventory_value', 200.00); // 100 + 100
+        $response->assertStatus(200);
+        $this->assertEquals(200.00, $response->json('data.total_inventory_value'));
     }
 }

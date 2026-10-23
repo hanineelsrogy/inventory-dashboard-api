@@ -1,348 +1,197 @@
-# 📦 Mini Inventory Dashboard RESTful API
+# Inventory Dashboard API
 
-![Laravel](https://img.shields.io/badge/Laravel-v12-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
-![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=for-the-badge&logo=php&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
-![Sanctum](https://img.shields.io/badge/Sanctum-Auth-F55247?style=for-the-badge&logo=laravel&logoColor=white)
-![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=for-the-badge&logo=openapiinitiative&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+A REST API for tracking a small shop's stock. You can manage categories and products, and a dashboard endpoint gives you the numbers a shop owner usually wants: how many products there are, which ones are running low, and how much the stock is worth.
 
-A clean, beginner-friendly RESTful API built with **Laravel 12** demonstrating production-grade architecture patterns for a portfolio project. It features token authentication via **Laravel Sanctum**, role-based authorization via **Policies**, full CRUD for Categories and Products, configurable KPI analytics, centralized JSON exception handling, and auto-generated interactive **Swagger/OpenAPI documentation**.
+It is built with Laravel and uses token authentication with two roles, `admin` and `staff`.
 
----
+I made this project to learn how to structure a backend properly instead of putting everything in controllers. Most of the work went into the parts around the CRUD: validation, permissions, error responses, and tests.
 
-## 🏛 Why This Architecture Matters
+## What it does
 
-This project was built to illustrate real-world backend best practices rather than quick hacks:
+- Log in and get a bearer token (Sanctum). Tokens expire.
+- Manage **categories** and **products** (create, read, update, delete).
+- Search products by name or SKU, filter them, sort them, and paginate the results.
+- See dashboard numbers: total categories, total products, active products, low-stock count, total inventory value, and the latest products.
+- Two roles: staff can add and edit, only admins can delete or create new users.
+- Every response, including errors, has the same JSON shape.
+- API documentation is generated from the code and available at `/docs/api`.
 
-1. **Defensive Database Integrity**: Categories cannot be deleted while products still belong to them (`restrictOnDelete` + HTTP `409 Conflict`), preventing catastrophic data loss.
-2. **Predictable JSON Envelope**: Every response—whether success (200, 201) or error (401, 403, 404, 409, 422, 429, 500)—follows a strict, consistent JSON shape via `ApiResponseTrait` and centralized handlers in `bootstrap/app.php`.
-3. **Hardened Security**:
-   - Login rate-limited to 5 requests per minute, partitioned by `email + IP` to protect shared office networks.
-   - Registration is restricted strictly to administrators (`authorize()` check prevents user enumeration).
-   - Sanctum tokens include expiration and single-session revocation on login.
-   - Stack traces are completely stripped from production 500 error responses (`APP_DEBUG=false`).
-4. **Single Source of Truth**: Business rules like the low-stock threshold are defined in `config/inventory.php` and shared across query filters and dashboard KPI calculations.
+## Built with
 
----
+- Laravel 12 on PHP 8.3+
+- Laravel Sanctum for authentication
+- MySQL 8 (development and tests)
+- Scramble for the API docs
 
-## 🛠 Tech Stack & Database Strategy
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Framework** | Laravel 12 (PHP 8.2+) | Modern API foundation |
-| **Primary Database** | MySQL 8.0 (Laragon / Herd) | Production-style relational database for local development |
-| **Testing Database** | SQLite (`:memory:`) | Blazing fast, zero-side-effect test executions with `RefreshDatabase` |
-| **Authentication** | Laravel Sanctum | Bearer token issuing, expiration, and revocation |
-| **Documentation** | [dedoc/scramble](https://scramble.dedoc.co/) | Zero-annotation OpenAPI 3.1 & Stoplight Elements interactive UI |
-| **Response Standardization** | `ApiResponseTrait` + `JsonResource` | Uniform JSON structure across all endpoints |
-
----
-
-## 👥 Roles & Seeded Accounts
-
-The application implements Role-Based Access Control (RBAC) enforced by **Laravel Policies** (`CategoryPolicy`, `ProductPolicy`):
-
-| Role | Permissions |
-|------|-------------|
-| **`admin`** | Full CRUD access to Categories and Products, can delete resources, can register new user accounts. |
-| **`staff`** | Can view, create, and update Categories and Products. **Cannot** delete resources and **cannot** register users. |
-
-The database seeder pre-populates two test accounts:
-
-| Email | Password | Role | Description |
-|-------|----------|------|-------------|
-| `admin@example.com` | `password` | `admin` | Full administrator privileges |
-| `staff@example.com` | `password` | `staff` | Restricted staff privileges |
-
----
-
-## 📋 API Endpoints Reference
-
-All endpoints are versioned under `/api/v1`.
-
-### 🔐 Authentication
-
-| Method | Endpoint | Access | Rate Limit | Description |
-|--------|----------|--------|------------|-------------|
-| `POST` | `/api/v1/auth/login` | Public | 5 req/min (`email+IP`) | Authenticate and obtain Bearer token |
-| `POST` | `/api/v1/auth/register` | 🔒 Admin only | 5 req/min (`email+IP`) | Register new admin or staff accounts |
-| `GET` | `/api/v1/auth/me` | 🔒 Authenticated | — | Retrieve current user profile |
-| `POST` | `/api/v1/auth/logout` | 🔒 Authenticated | — | Revoke current token |
-
-### 📊 Dashboard Analytics
-
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| `GET` | `/api/v1/dashboard/stats` | 🔒 Authenticated | KPI metrics, stock valuation, and latest 5 products |
-
-### 📁 Categories CRUD
-
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| `GET` | `/api/v1/categories` | 🔒 Authenticated | List all categories with `products_count` |
-| `POST` | `/api/v1/categories` | 🔒 Authenticated | Create a category (slug auto-generated) |
-| `GET` | `/api/v1/categories/{id}` | 🔒 Authenticated | Retrieve single category with its products |
-| `PUT` | `/api/v1/categories/{id}` | 🔒 Authenticated | Update category details |
-| `DELETE` | `/api/v1/categories/{id}` | 🔒 Admin only | Delete category (blocked with 409 if products exist) |
-
-### 📦 Products CRUD
-
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| `GET` | `/api/v1/products` | 🔒 Authenticated | List paginated products with query filters |
-| `POST` | `/api/v1/products` | 🔒 Authenticated | Create a new product |
-| `GET` | `/api/v1/products/{id}` | 🔒 Authenticated | Retrieve single product with parent category |
-| `PUT` | `/api/v1/products/{id}` | 🔒 Authenticated | Update product details or stock count |
-| `DELETE` | `/api/v1/products/{id}` | 🔒 Admin only | Delete product |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- PHP 8.2 or higher
-- Composer
-- MySQL 8.0 (via [Laragon](https://laragon.org/) or [Laravel Herd](https://herd.laravel.com/))
-- Git
-
-### Installation
+## Running it locally
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/<your-github-username>/inventory-dashboard-api.git
+git clone https://github.com/hanineeeeee/inventory-dashboard-api.git
 cd inventory-dashboard-api
 
-# 2. Install PHP dependencies
 composer install
-
-# 3. Setup environment configuration
 cp .env.example .env
 php artisan key:generate
 ```
 
-### Database Setup (MySQL)
-
-Ensure MySQL is running in your local environment, then create the database and run migrations with seed data:
+Create two empty MySQL databases: `inventory_dashboard` for development and `inventory_dashboard_test` for the tests (see [Tests](#tests)). Put the first one's name and your credentials in `.env`, then:
 
 ```bash
-# 4. Create the MySQL database
-mysql -u root -e "CREATE DATABASE IF NOT EXISTS inventory_dashboard;"
-
-# 5. Run migrations and seed default data (Admin, Staff, 4 Categories, 15 Products)
-php artisan migrate:fresh --seed
-```
-
-### Start the Development Server
-
-```bash
+php artisan migrate --seed
 php artisan serve
 ```
 
-The API will be accessible at `http://localhost:8000`.
+The API runs at `http://localhost:8000/api/v1`. The seeder creates two users for local use:
 
----
+| Role  | Email               | Password   |
+|-------|---------------------|------------|
+| Admin | admin@example.com   | password   |
+| Staff | staff@example.com   | password   |
 
-## 📄 Interactive API Documentation (Swagger / OpenAPI)
+### Trying it out
 
-Once the local server is running, open your web browser and navigate to:
-
-🔗 **[http://localhost:8000/docs/api](http://localhost:8000/docs/api)**
-
-### How to test protected endpoints in the browser:
-1. Under **Authentication**, select `POST /api/v1/auth/login`.
-2. Click **Try it out** and submit `admin@example.com` / `password`.
-3. Copy the token from the response.
-4. Click the **Authorize** 🔒 button at the top right of the documentation page.
-5. Paste your Bearer token and click **Apply**.
-6. You can now execute and test all protected endpoints directly in the browser!
-
-The raw OpenAPI 3.1 specification is available at `http://localhost:8000/docs/api.json`.
-
----
-
-## 🧪 Running Automated Tests
-
-Tests run against an **in-memory SQLite database**, ensuring your MySQL development database is never touched or polluted during testing.
+Log in:
 
 ```bash
-# Run all tests
-php artisan test
-
-# Run tests with compact detail
-php artisan test --filter=AuthTest
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"password"}'
 ```
 
----
+Use the token from the response:
 
-## 📦 Sample JSON Responses
+```bash
+curl http://localhost:8000/api/v1/products?search=mouse&sort_by=price \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
-### 1. Successful Authentication (`POST /api/v1/auth/login`)
+You can also open `/docs/api` in the browser and try the endpoints from there.
+
+## Endpoints
+
+Everything lives under `/api/v1`. All routes need a token except `login`.
+
+| Method    | Path               | Notes                                   |
+|-----------|--------------------|-----------------------------------------|
+| POST      | /auth/login        | Returns a token                         |
+| POST      | /auth/register     | Admin only. There is no public sign-up  |
+| POST      | /auth/logout       | Revokes the current token               |
+| GET       | /auth/me           | The logged-in user                      |
+| GET       | /dashboard/stats   | Dashboard numbers                       |
+| GET       | /categories        | Paginated, with a product count         |
+| POST      | /categories        |                                         |
+| GET       | /categories/{id}   | Includes its products                   |
+| PUT/PATCH | /categories/{id}   |                                         |
+| DELETE    | /categories/{id}   | Admin only, and the category must be empty |
+| GET       | /products          | Search, filter, sort, paginate          |
+| POST      | /products          |                                         |
+| GET       | /products/{id}     | Includes its category                   |
+| PUT/PATCH | /products/{id}     |                                         |
+| DELETE    | /products/{id}     | Admin only                              |
+
+### Product list options
+
+| Parameter     | What it does                                                    |
+|---------------|-----------------------------------------------------------------|
+| `search`      | Matches product name or SKU                                     |
+| `category_id` | Products in one category                                        |
+| `status`      | `active` or `inactive`                                          |
+| `low_stock`   | `1` shows only products below the low-stock threshold           |
+| `sort_by`     | `id`, `name`, `sku`, `price`, `stock`, `status`, `created_at`   |
+| `direction`   | `asc` or `desc` (default `desc`)                                |
+| `per_page`    | 1 to 50 (default 10)                                            |
+
+The categories list supports `sort_by` (including `products_count`), `direction`, and `per_page` the same way.
+
+## Responses
+
+Success:
+
 ```json
 {
   "success": true,
-  "message": "Logged in successfully.",
-  "data": {
-    "user": {
-      "id": 1,
-      "name": "Admin",
-      "email": "admin@example.com",
-      "role": "admin",
-      "created_at": "2026-10-23T17:25:52.000000Z"
-    },
-    "token": "2|9oP3hR6m..."
-  }
+  "message": "Product created successfully.",
+  "data": { "id": 1, "name": "Wireless Mouse", "sku": "ELEC-001", "price": "29.99", "stock": 50 }
 }
 ```
 
-### 2. Dashboard Analytics (`GET /api/v1/dashboard/stats`)
-```json
-{
-  "success": true,
-  "message": "Dashboard statistics retrieved successfully.",
-  "data": {
-    "total_categories": 4,
-    "total_products": 15,
-    "active_products": 13,
-    "low_stock_count": 6,
-    "total_inventory_value": 15090.17,
-    "latest_products": [
-      {
-        "id": 15,
-        "category_id": 4,
-        "name": "Water Bottle",
-        "sku": "SPRT-004",
-        "price": "14.99",
-        "stock": 200,
-        "status": "active",
-        "category": {
-          "id": 4,
-          "name": "Sports & Outdoors",
-          "slug": "sports-outdoors"
-        }
-      }
-    ]
-  }
-}
-```
+Lists also include `meta` and `links` for pagination. Errors:
 
-### 3. List Categories (`GET /api/v1/categories`)
-```json
-{
-  "success": true,
-  "message": "Categories retrieved successfully.",
-  "data": [
-    {
-      "id": 1,
-      "name": "Electronics",
-      "slug": "electronics",
-      "description": "Gadgets, devices, and electronic accessories.",
-      "is_active": true,
-      "products_count": 4,
-      "created_at": "2026-10-23T17:25:52.000000Z"
-    }
-  ]
-}
-```
-
-### 4. Create Category (`POST /api/v1/categories`)
-*Auto-generates unique slug even if a duplicate name is passed:*
-```json
-{
-  "success": true,
-  "message": "Category created successfully.",
-  "data": {
-    "id": 5,
-    "name": "Electronics",
-    "slug": "electronics-2",
-    "description": null,
-    "is_active": true,
-    "created_at": "2026-10-23T20:10:00.000000Z"
-  }
-}
-```
-
-### 5. Category Deletion Conflict (`DELETE /api/v1/categories/1` with products)
-```json
-{
-  "success": false,
-  "message": "Cannot delete category because it still contains products. Please reassign or delete the products first.",
-  "errors": null
-}
-```
-
-### 6. Validation Error (HTTP 422)
 ```json
 {
   "success": false,
   "message": "The given data was invalid.",
-  "errors": {
-    "sku": ["The sku has already been taken."],
-    "price": ["The price field must be a number."]
-  }
+  "errors": { "sku": ["The sku has already been taken."] }
 }
 ```
 
-### 7. Unauthorized Action (HTTP 403)
-```json
-{
-  "success": false,
-  "message": "This action is unauthorized.",
-  "errors": null
-}
+| Status | Meaning                                              |
+|--------|------------------------------------------------------|
+| 401    | No token, a bad token, or an expired token           |
+| 403    | Logged in, but not allowed to do this                |
+| 404    | The record or the route does not exist               |
+| 409    | The category still has products                      |
+| 422    | Validation failed                                    |
+| 429    | Too many login attempts                              |
+| 500    | Unexpected error (details hidden unless `APP_DEBUG=true`) |
+
+## Decisions I made
+
+**Permissions live in policies.** Controllers call the policy instead of checking `$user->role` themselves, so the rules are in one place per model.
+
+**A category with products cannot be deleted.** At first, deleting a category also deleted all its products through `cascadeOnDelete`. That seemed dangerous, so the foreign key now uses `restrictOnDelete`, and the API returns a clear 409 message.
+
+**Slugs are generated in the model.** Two categories with the same name used to crash the app because of the unique index. Now the second one becomes `name-2`, and it works the same wherever a category is created.
+
+**Business settings are in config, not scattered in code.** The low-stock threshold was hard-coded as `5` in two places. It now lives in `config/inventory.php` and both the filter and the dashboard read from it.
+
+**Inactive products are not counted in inventory value by default.** I decided a discontinued product should not count as stock the shop can sell. This can be changed with an environment variable (see below).
+
+**Login attempts are limited by email and IP together**, so one shared network does not lock everyone out.
+
+**Errors are handled in one place** (`bootstrap/app.php`), so the API never returns an HTML page or a stack trace, whatever goes wrong.
+
+## Settings
+
+Set these in `.env`:
+
+| Variable                                | Default | Meaning                                              |
+|-----------------------------------------|---------|------------------------------------------------------|
+| `SANCTUM_EXPIRATION`                    | 1440    | How long a token lasts, in minutes                   |
+| `LOW_STOCK_THRESHOLD`                   | 5       | A product is "low" when its stock is below this      |
+| `INVENTORY_VALUATION_INCLUDES_INACTIVE` | false   | Count inactive products in total inventory value     |
+
+## Tests
+
+```bash
+php artisan test
 ```
 
-### 8. Rate Limit Exceeded (HTTP 429)
-```json
-{
-  "success": false,
-  "message": "Too many requests. Please slow down.",
-  "errors": null
-}
-```
+The tests run on MySQL, the same database as development, so queries behave the same way in both. They use a separate database (`inventory_dashboard_test`) because every test run wipes its tables. Never point the tests at your development database. They cover login and roles, rate limiting, category and product CRUD, filters, sorting, search with special characters, validation errors, the error response format, and the dashboard numbers. GitHub Actions runs them on every push.
 
----
-
-## 📁 Project Directory Structure
+## Folder structure
 
 ```
 app/
-├── Http/
-│   ├── Controllers/Api/V1/
-│   │   ├── AuthController.php        # Register, login, logout, me
-│   │   ├── DashboardController.php   # KPI stats & aggregations
-│   │   ├── CategoryController.php    # Categories resource CRUD
-│   │   └── ProductController.php     # Products resource CRUD with filters
-│   ├── Requests/
-│   │   ├── Auth/                     # RegisterRequest, LoginRequest
-│   │   ├── StoreCategoryRequest.php
-│   │   ├── UpdateCategoryRequest.php
-│   │   ├── StoreProductRequest.php
-│   │   └── UpdateProductRequest.php
-│   └── Resources/
-│       ├── UserResource.php
-│       ├── CategoryResource.php
-│       └── ProductResource.php
-├── Models/
-│   ├── User.php                      # HasApiTokens, role helper (isAdmin)
-│   ├── Category.php                  # Auto unique-slug lifecycle hooks
-│   └── Product.php                   # Scopes, casts, relationships
-├── Policies/
-│   ├── CategoryPolicy.php            # Only admins can delete
-│   └── ProductPolicy.php             # Only admins can delete
-└── Traits/
-    └── ApiResponseTrait.php          # Standard success() & error() JSON
-
-config/
-└── inventory.php                     # Low-stock threshold & valuation settings
-
-routes/
-└── api.php                           # Versioned API v1 route definitions
+  Http/Controllers/Api/V1/   Auth, Category, Product, Dashboard
+  Http/Requests/             Validation rules per endpoint
+  Http/Resources/            How each model is turned into JSON
+  Models/
+  Policies/                  Who is allowed to do what
+  Traits/ApiResponseTrait.php
+bootstrap/app.php            Error handling
+config/inventory.php         Business settings
+routes/api.php
+tests/Feature/
 ```
 
----
+## Known limitations and next steps
 
-## 📝 License
+- Stock is a single number on the product. There is no history of stock changes, so you cannot see who changed what.
+- Deleting is permanent. Soft deletes would be safer.
+- Logging in revokes all earlier tokens, which means logging in on a second device logs out the first.
+- There is no frontend. This is only the API.
 
-This project is open-sourced under the [MIT License](LICENSE).
+## License
+
+MIT

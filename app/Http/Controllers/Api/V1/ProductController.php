@@ -10,7 +10,6 @@ use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 class ProductController extends Controller
@@ -26,20 +25,9 @@ class ProductController extends Controller
 
         $query = Product::with('category');
 
-        // 1. Search with escaped wildcards
+        // 1. Search (delegated to model query scope)
         if ($request->filled('search')) {
-            $search = addcslashes($request->input('search'), '%_\\');
-            $driver = DB::connection()->getDriverName();
-
-            $query->where(function ($q) use ($search, $driver) {
-                if ($driver === 'sqlite') {
-                    $q->whereRaw("name LIKE ? ESCAPE '\\'", ["%{$search}%"])
-                      ->orWhereRaw("sku LIKE ? ESCAPE '\\'", ["%{$search}%"]);
-                } else {
-                    $q->where('name', 'LIKE', "%{$search}%")
-                      ->orWhere('sku', 'LIKE', "%{$search}%");
-                }
-            });
+            $query->search($request->input('search'));
         }
 
         // 2. Filter by category
