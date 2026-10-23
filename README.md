@@ -18,7 +18,7 @@ I made this project to learn how to structure a backend properly instead of putt
 
 ## Built with
 
-- Laravel 12 on PHP 8.3+
+- Laravel 13 on PHP 8.4+
 - Laravel Sanctum for authentication
 - MySQL 8 (development and tests)
 - Scramble for the API docs
