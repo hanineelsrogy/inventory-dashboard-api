@@ -40,12 +40,12 @@ class DashboardController extends Controller
             ->get();
 
         return $this->success([
-            'total_categories'       => Category::count(),
-            'total_products'         => (int) $stats->total_products,
-            'active_products'        => (int) $stats->active_products,
-            'low_stock_count'        => (int) $stats->low_stock_count,
-            'total_inventory_value'  => round((float) $stats->total_inventory_value, 2),
-            'latest_products'        => ProductResource::collection($latestProducts),
+            'total_categories' => Category::count(),
+            'total_products' => (int) $stats->total_products,
+            'active_products' => (int) $stats->active_products,
+            'low_stock_count' => (int) $stats->low_stock_count,
+            'total_inventory_value' => round((float) $stats->total_inventory_value, 2),
+            'latest_products' => ProductResource::collection($latestProducts),
         ], 'Dashboard statistics retrieved successfully.');
     }
 }

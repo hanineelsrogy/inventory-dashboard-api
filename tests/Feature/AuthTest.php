@@ -14,13 +14,13 @@ class AuthTest extends TestCase
     public function test_user_can_login_with_valid_credentials(): void
     {
         $user = User::factory()->create([
-            'email'    => 'admin@example.com',
+            'email' => 'admin@example.com',
             'password' => Hash::make('password123'),
-            'role'     => 'admin',
+            'role' => 'admin',
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
-            'email'    => 'admin@example.com',
+            'email' => 'admin@example.com',
             'password' => 'password123',
         ]);
 
@@ -43,12 +43,12 @@ class AuthTest extends TestCase
     public function test_user_cannot_login_with_invalid_password(): void
     {
         User::factory()->create([
-            'email'    => 'admin@example.com',
+            'email' => 'admin@example.com',
             'password' => Hash::make('correct_password'),
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
-            'email'    => 'admin@example.com',
+            'email' => 'admin@example.com',
             'password' => 'wrong_password',
         ]);
 
@@ -80,7 +80,7 @@ class AuthTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'Unauthenticated.',
-                'errors'  => null,
+                'errors' => null,
             ]);
     }
 
@@ -96,7 +96,7 @@ class AuthTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'message' => 'Logged out successfully.',
-                'data'    => null,
+                'data' => null,
             ]);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
@@ -113,7 +113,7 @@ class AuthTest extends TestCase
 
         // Login afresh
         $this->postJson('/api/v1/auth/login', [
-            'email'    => $user->email,
+            'email' => $user->email,
             'password' => 'secret123',
         ])->assertStatus(200);
 
@@ -127,11 +127,11 @@ class AuthTest extends TestCase
 
         $response = $this->actingAs($admin, 'sanctum')
             ->postJson('/api/v1/auth/register', [
-                'name'                  => 'John Staff',
-                'email'                 => 'john@example.com',
-                'password'              => 'password123',
+                'name' => 'John Staff',
+                'email' => 'john@example.com',
+                'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'role'                  => 'staff',
+                'role' => 'staff',
             ]);
 
         $response->assertStatus(201)
@@ -141,7 +141,7 @@ class AuthTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'john@example.com',
-            'role'  => 'staff',
+            'role' => 'staff',
         ]);
     }
 
@@ -153,9 +153,9 @@ class AuthTest extends TestCase
         // Staff tries to submit an email that already exists
         $response = $this->actingAs($staff, 'sanctum')
             ->postJson('/api/v1/auth/register', [
-                'name'                  => 'Any Name',
-                'email'                 => $existingAdmin->email,
-                'password'              => 'password123',
+                'name' => 'Any Name',
+                'email' => $existingAdmin->email,
+                'password' => 'password123',
                 'password_confirmation' => 'password123',
             ]);
 
@@ -167,9 +167,9 @@ class AuthTest extends TestCase
     public function test_guest_cannot_register_user(): void
     {
         $response = $this->postJson('/api/v1/auth/register', [
-            'name'                  => 'Guest User',
-            'email'                 => 'guest@example.com',
-            'password'              => 'password123',
+            'name' => 'Guest User',
+            'email' => 'guest@example.com',
+            'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);
 
@@ -182,14 +182,14 @@ class AuthTest extends TestCase
 
         for ($i = 1; $i <= 5; $i++) {
             $this->postJson('/api/v1/auth/login', [
-                'email'    => $email,
+                'email' => $email,
                 'password' => 'wrong',
             ])->assertStatus(401);
         }
 
         // 6th attempt from the same IP targeting the same email must be throttled
         $response = $this->postJson('/api/v1/auth/login', [
-            'email'    => $email,
+            'email' => $email,
             'password' => 'wrong',
         ]);
 

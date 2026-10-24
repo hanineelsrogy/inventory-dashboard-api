@@ -109,4 +109,21 @@ class CategoryController extends Controller
 
         return $this->success(null, 'Category deleted successfully.');
     }
+
+    /**
+     * Restore a soft-deleted category.
+     */
+    public function restore(int|string $id): JsonResponse
+    {
+        $category = Category::onlyTrashed()->findOrFail($id);
+
+        Gate::authorize('restore', $category);
+
+        $category->restore();
+
+        return $this->success(
+            new CategoryResource($category),
+            'Category restored successfully.'
+        );
+    }
 }

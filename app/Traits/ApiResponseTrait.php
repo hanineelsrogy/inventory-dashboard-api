@@ -14,7 +14,7 @@ trait ApiResponseTrait
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $data,
+            'data' => $data,
         ], $code);
     }
 
@@ -29,9 +29,9 @@ trait ApiResponseTrait
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $payload['data'] ?? [],
-            'meta'    => $payload['meta'] ?? null,
-            'links'   => $payload['links'] ?? null,
+            'data' => $payload['data'] ?? [],
+            'meta' => $payload['meta'] ?? null,
+            'links' => $payload['links'] ?? null,
         ], $code);
     }
 
@@ -43,7 +43,7 @@ trait ApiResponseTrait
         return response()->json([
             'success' => false,
             'message' => $message,
-            'errors'  => $errors,
+            'errors' => $errors,
         ], $code);
     }
 }

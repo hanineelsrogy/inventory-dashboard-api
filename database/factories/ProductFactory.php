@@ -17,11 +17,11 @@ class ProductFactory extends Factory
     {
         return [
             'category_id' => Category::factory(),
-            'name'        => ucfirst(fake()->words(2, true)),
-            'sku'         => strtoupper(fake()->unique()->bothify('PROD-####-??')),
-            'price'       => fake()->randomFloat(2, 5, 500),
-            'stock'       => fake()->numberBetween(10, 100),
-            'status'      => 'active',
+            'name' => ucfirst(fake()->words(2, true)),
+            'sku' => strtoupper(fake()->unique()->bothify('PROD-####-??')),
+            'price' => fake()->randomFloat(2, 5, 500),
+            'stock' => fake()->numberBetween(10, 100),
+            'status' => 'active',
         ];
     }
 

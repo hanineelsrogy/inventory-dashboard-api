@@ -36,7 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthenticated.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], 401);
             }
         });
@@ -47,7 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => $e->getMessage() ?: 'This action is unauthorized.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], 403);
             }
         });
@@ -57,7 +57,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => $e->getMessage() ?: 'This action is unauthorized.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], 403);
             }
         });
@@ -68,7 +68,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => 'Resource not found.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], 404);
             }
         });
@@ -79,7 +79,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => 'Resource not found.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], 404);
             }
         });
@@ -90,7 +90,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => 'The given data was invalid.',
-                    'errors'  => $e->errors(),
+                    'errors' => $e->errors(),
                 ], 422);
             }
         });
@@ -101,7 +101,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => 'Too many requests. Please slow down.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], 429, $e->getHeaders());
             }
         });
@@ -112,7 +112,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => $e->getMessage() ?: 'An HTTP error occurred.',
-                    'errors'  => null,
+                    'errors' => null,
                 ], $e->getStatusCode(), $e->getHeaders());
             }
         });
@@ -127,7 +127,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'success' => false,
                     'message' => $message,
-                    'errors'  => null,
+                    'errors' => null,
                 ], 500);
             }
         });

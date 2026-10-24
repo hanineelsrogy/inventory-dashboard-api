@@ -50,7 +50,7 @@ class CategoryTest extends TestCase
 
         $response = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/categories', [
-                'name'        => 'Office Supplies',
+                'name' => 'Office Supplies',
                 'description' => 'Pens, paper, and desks.',
             ]);
 
@@ -118,7 +118,7 @@ class CategoryTest extends TestCase
             ->assertJsonPath('data.slug', 'new-title');
 
         $this->assertDatabaseHas('categories', [
-            'id'   => $category->id,
+            'id' => $category->id,
             'name' => 'New Title',
             'slug' => 'new-title',
         ]);
@@ -135,7 +135,58 @@ class CategoryTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('success', true);
 
-        $this->assertDatabaseMissing('categories', ['id' => $category->id]);
+        $this->assertSoftDeleted('categories', ['id' => $category->id]);
+    }
+
+    public function test_admin_can_restore_soft_deleted_category(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $category = Category::factory()->create();
+        $category->delete();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/categories/{$category->id}/restore");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.id', $category->id);
+
+        $this->assertNotSoftDeleted('categories', ['id' => $category->id]);
+    }
+
+    public function test_staff_cannot_restore_soft_deleted_category_returns_403(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $category = Category::factory()->create();
+        $category->delete();
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->postJson("/api/v1/categories/{$category->id}/restore");
+
+        $response->assertStatus(403);
+        $this->assertSoftDeleted('categories', ['id' => $category->id]);
+    }
+
+    public function test_can_delete_category_if_all_its_products_are_soft_deleted(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+
+        // Attempting to delete when product is active fails with 409
+        $failResponse = $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/v1/categories/{$category->id}");
+        $failResponse->assertStatus(409);
+
+        // Soft-delete the product
+        $product->delete();
+
+        // Now category can be soft-deleted because no active products exist
+        $successResponse = $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/v1/categories/{$category->id}");
+        $successResponse->assertStatus(200);
+
+        $this->assertSoftDeleted('categories', ['id' => $category->id]);
     }
 
     public function test_staff_cannot_delete_category(): void

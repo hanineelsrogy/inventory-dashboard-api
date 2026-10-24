@@ -21,7 +21,7 @@ class ErrorHandlingTest extends TestCase
             ->assertExactJson([
                 'success' => false,
                 'message' => 'Unauthenticated.',
-                'errors'  => null,
+                'errors' => null,
             ]);
     }
 
@@ -37,7 +37,7 @@ class ErrorHandlingTest extends TestCase
             ->assertExactJson([
                 'success' => false,
                 'message' => 'This action is unauthorized.',
-                'errors'  => null,
+                'errors' => null,
             ]);
     }
 
@@ -52,7 +52,7 @@ class ErrorHandlingTest extends TestCase
             ->assertExactJson([
                 'success' => false,
                 'message' => 'Resource not found.',
-                'errors'  => null,
+                'errors' => null,
             ]);
     }
 
@@ -64,7 +64,7 @@ class ErrorHandlingTest extends TestCase
             ->assertExactJson([
                 'success' => false,
                 'message' => 'Resource not found.',
-                'errors'  => null,
+                'errors' => null,
             ]);
     }
 

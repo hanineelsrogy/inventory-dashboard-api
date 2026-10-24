@@ -47,4 +47,13 @@ class ProductPolicy
     {
         return $user->isAdmin();
     }
+
+    /**
+     * Determine whether the user can restore the model.
+     * Only administrators are allowed to restore products.
+     */
+    public function restore(User $user, Product $product): bool
+    {
+        return $user->isAdmin();
+    }
 }

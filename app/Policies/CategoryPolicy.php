@@ -47,4 +47,13 @@ class CategoryPolicy
     {
         return $user->isAdmin();
     }
+
+    /**
+     * Determine whether the user can restore the model.
+     * Only administrators are allowed to restore categories.
+     */
+    public function restore(User $user, Category $category): bool
+    {
+        return $user->isAdmin();
+    }
 }

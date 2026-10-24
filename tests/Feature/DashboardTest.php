@@ -34,28 +34,28 @@ class DashboardTest extends TestCase
         // Product 1: active, stock 2 (low stock), price 10.00 -> value 20.00
         Product::factory()->create([
             'category_id' => $cat1->id,
-            'name'        => 'Item 1',
-            'stock'       => 2,
-            'price'       => 10.00,
-            'status'      => 'active',
+            'name' => 'Item 1',
+            'stock' => 2,
+            'price' => 10.00,
+            'status' => 'active',
         ]);
 
         // Product 2: active, stock 10 (normal), price 50.00 -> value 500.00
         Product::factory()->create([
             'category_id' => $cat1->id,
-            'name'        => 'Item 2',
-            'stock'       => 10,
-            'price'       => 50.00,
-            'status'      => 'active',
+            'name' => 'Item 2',
+            'stock' => 10,
+            'price' => 50.00,
+            'status' => 'active',
         ]);
 
         // Product 3: inactive, stock 1 (low stock), price 100.00 -> value 100.00 (excluded from valuation by default)
         Product::factory()->create([
             'category_id' => $cat2->id,
-            'name'        => 'Item 3',
-            'stock'       => 1,
-            'price'       => 100.00,
-            'status'      => 'inactive',
+            'name' => 'Item 3',
+            'stock' => 1,
+            'price' => 100.00,
+            'status' => 'inactive',
         ]);
 
         $response = $this->actingAs($user, 'sanctum')
@@ -79,15 +79,15 @@ class DashboardTest extends TestCase
 
         // Active: 10 * 10 = 100
         Product::factory()->create([
-            'stock'  => 10,
-            'price'  => 10.00,
+            'stock' => 10,
+            'price' => 10.00,
             'status' => 'active',
         ]);
 
         // Inactive: 5 * 20 = 100
         Product::factory()->create([
-            'stock'  => 5,
-            'price'  => 20.00,
+            'stock' => 5,
+            'price' => 20.00,
             'status' => 'inactive',
         ]);
 

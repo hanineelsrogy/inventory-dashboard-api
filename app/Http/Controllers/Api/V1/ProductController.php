@@ -126,4 +126,29 @@ class ProductController extends Controller
 
         return $this->success(null, 'Product deleted successfully.');
     }
+
+    /**
+     * Restore a soft-deleted product.
+     */
+    public function restore(int|string $id): JsonResponse
+    {
+        $product = Product::onlyTrashed()->findOrFail($id);
+
+        Gate::authorize('restore', $product);
+
+        if ($product->category()->withTrashed()->first()?->trashed()) {
+            return $this->error(
+                'Cannot restore product because its category has been deleted. Restore the category first.',
+                409
+            );
+        }
+
+        $product->restore();
+        $product->load('category');
+
+        return $this->success(
+            new ProductResource($product),
+            'Product restored successfully.'
+        );
+    }
 }

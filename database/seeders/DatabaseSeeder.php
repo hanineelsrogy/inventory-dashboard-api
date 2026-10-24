@@ -6,7 +6,6 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,17 +13,17 @@ class DatabaseSeeder extends Seeder
     {
         // 1. Create default users (Admin + Staff)
         User::create([
-            'name'     => 'Admin',
-            'email'    => 'admin@example.com',
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
             'password' => bcrypt('password'),
-            'role'     => 'admin',
+            'role' => 'admin',
         ]);
 
         User::create([
-            'name'     => 'Staff Member',
-            'email'    => 'staff@example.com',
+            'name' => 'Staff Member',
+            'email' => 'staff@example.com',
             'password' => bcrypt('password'),
-            'role'     => 'staff',
+            'role' => 'staff',
         ]);
 
         // 2. Create 4 Categories

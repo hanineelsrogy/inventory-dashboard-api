@@ -84,7 +84,7 @@ class ProductTest extends TestCase
         // Create product with literal % in sku and literal _ in name
         $special = Product::factory()->create([
             'name' => 'Percent_Special',
-            'sku'  => 'SPEC%100',
+            'sku' => 'SPEC%100',
         ]);
 
         // Regular products that should not match literal %
@@ -143,11 +143,11 @@ class ProductTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/products', [
                 'category_id' => $category->id,
-                'name'        => 'Mechanical Keyboard',
-                'sku'         => 'TECH-KEY-001',
-                'price'       => 89.99,
-                'stock'       => 15,
-                'status'      => 'active',
+                'name' => 'Mechanical Keyboard',
+                'sku' => 'TECH-KEY-001',
+                'price' => 89.99,
+                'stock' => 15,
+                'status' => 'active',
             ]);
 
         $response->assertStatus(201)
@@ -188,7 +188,7 @@ class ProductTest extends TestCase
             ->assertJsonPath('data.price', '35.50');
 
         $this->assertDatabaseHas('products', [
-            'id'    => $product->id,
+            'id' => $product->id,
             'price' => 35.50,
         ]);
     }
@@ -202,7 +202,66 @@ class ProductTest extends TestCase
             ->deleteJson("/api/v1/products/{$product->id}");
 
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+        $this->assertSoftDeleted('products', ['id' => $product->id]);
+    }
+
+    public function test_admin_can_restore_soft_deleted_product(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $product = Product::factory()->create();
+        $product->delete();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/products/{$product->id}/restore");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.id', $product->id);
+
+        $this->assertNotSoftDeleted('products', ['id' => $product->id]);
+    }
+
+    public function test_staff_cannot_restore_soft_deleted_product_returns_403(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $product = Product::factory()->create();
+        $product->delete();
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->postJson("/api/v1/products/{$product->id}/restore");
+
+        $response->assertStatus(403);
+        $this->assertSoftDeleted('products', ['id' => $product->id]);
+    }
+
+    public function test_cannot_restore_product_if_category_is_soft_deleted_returns_409(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $category = Category::factory()->create();
+        $product = Product::factory()->create(['category_id' => $category->id]);
+
+        $product->delete();
+        $category->delete();
+
+        // Attempting to restore product while category is deleted must fail
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/products/{$product->id}/restore");
+
+        $response->assertStatus(409)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Cannot restore product because its category has been deleted. Restore the category first.');
+
+        $this->assertSoftDeleted('products', ['id' => $product->id]);
+
+        // Restore category first
+        $category->restore();
+
+        // Now restoring product succeeds
+        $retryResponse = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/products/{$product->id}/restore");
+
+        $retryResponse->assertStatus(200);
+        $this->assertNotSoftDeleted('products', ['id' => $product->id]);
     }
 
     public function test_staff_cannot_delete_product_returns_403(): void
