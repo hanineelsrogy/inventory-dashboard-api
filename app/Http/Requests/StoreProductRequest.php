@@ -20,7 +20,9 @@ class StoreProductRequest extends FormRequest
             'sku' => ['required', 'string', 'max:100', 'unique:products,sku'],
             'price' => ['required', 'numeric', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
+            'reorder_level' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+            'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 }

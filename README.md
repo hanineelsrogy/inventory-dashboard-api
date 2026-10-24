@@ -1,29 +1,118 @@
-# Inventory Dashboard API
+# Inventory Dashboard API (v2)
 
-A REST API for tracking a small shop's stock. You can manage categories and products, and a dashboard endpoint gives you the numbers a shop owner usually wants: how many products there are, which ones are running low, and how much the stock is worth.
+A production-ready REST API for inventory management, stock movement auditing, and warehouse reporting. It tracks categories and products, maintains an immutable ledger of every stock adjustment, evaluates per-product reorder thresholds, streams CSV exports, and serves a high-performance cached dashboard.
 
-It is built with Laravel and uses token authentication with two roles, `admin` and `staff`.
+Built with Laravel 13 on PHP 8.4, Laravel Sanctum, and MySQL 8.
 
-I made this project to learn how to structure a backend properly instead of putting everything in controllers. Most of the work went into the parts around the CRUD: validation, permissions, error responses, and tests.
+---
 
-## What it does
+## Architecture Pipeline
 
-- Log in and get a bearer token (Sanctum). Tokens expire.
-- Manage **categories** and **products** (create, read, update, delete).
-- Search products by name or SKU, filter them, sort them, and paginate the results.
-- See dashboard numbers: total categories, total products, active products, low-stock count, total inventory value, and the latest products.
-- Two roles: staff can add and edit, only admins can delete or create new users.
-- Every response, including errors, has the same JSON shape.
-- API documentation is generated from the code and available at `/docs/api`.
+The project follows a strict decoupled architecture to keep controllers slim, business rules testable, and security checks centralized:
 
-## Built with
+```
+┌─────────┐     ┌────────────┐     ┌─────────────┐     ┌──────────┐     ┌────────────┐     ┌──────────┐
+│ Request │ ──> │ Middleware │ ──> │ FormRequest │ ──> │  Policy  │ ──> │ Controller │ ──> │ Resource │ ──> JSON
+└─────────┘     └────────────┘     └─────────────┘     └──────────┘     └────────────┘     └──────────┘
+```
 
-- Laravel 13 on PHP 8.4+
-- Laravel Sanctum for authentication
-- MySQL 8 (development and tests)
-- Scramble for the API docs
+1. **Request & Middleware (`bootstrap/app.php` & `routes/api.php`):**
+   - Validates bearer token via Laravel Sanctum.
+   - Enforces rate limiting on authentication attempts.
+   - Intercepts all API exceptions, guaranteeing consistent JSON error formatting (`ApiResponseTrait`) with zero stack trace leakage.
+2. **FormRequest (`app/Http/Requests`):**
+   - Isolates validation rules and input normalization.
+   - Rejects invalid payloads with standardized 422 Unprocessable Entity responses before reaching controller logic.
+3. **Policy (`app/Policies`):**
+   - Encapsulates role-based authorization (`admin` vs `staff`).
+   - Controllers call `Gate::authorize()` rather than hardcoding `$user->role === 'admin'`.
+4. **Controller (`app/Http/Controllers/Api/V1`):**
+   - Acts strictly as an orchestrator.
+   - Manages atomic database transactions (`DB::transaction`) for stock movements.
+   - Interacts with cache layers and streams responses.
+5. **Resource (`app/Http/Resources`):**
+   - Decouples internal database schema from external API contracts.
+   - Ensures uniform JSON responses: `{ "success": true, "message": "...", "data": ... }`.
 
-## Running it locally
+---
+
+## Features (Version 2.0)
+
+- **Authentication & Roles:** Sanctum bearer tokens with expiration (24h) and single active device login. Two roles: `admin` (full management) and `staff` (operational CRUD).
+- **Categories Management:** CRUD with collision-free slug generation, pagination, and sorting.
+- **Products Management:** CRUD with SKU uniqueness, status flags (`active`/`inactive`), search, multi-field filtering, and sorting.
+- **Soft Deletes & Safe Restoration:**
+  - Soft deletes on categories and products (`deleted_at`).
+  - Admin-only restoration endpoints (`POST /categories/{id}/restore`, `POST /products/{id}/restore`).
+  - Integrity guard: Categories cannot be deleted while containing active products, and products cannot be restored if their parent category is soft-deleted.
+- **Stock Movements Audit Ledger:**
+  - Dedicated `stock_movements` table recording product ID, user ID, delta, before/after counts, reason, and timestamp.
+  - Changes through the API are created atomically inside database transactions.
+  - Historical audit endpoint: `GET /products/{id}/movements`.
+- **Per-Product Reorder Levels:**
+  - Products define an optional `reorder_level` for custom low-stock alerts.
+  - Automatically falls back to `config('inventory.low_stock_threshold')` when left unspecified.
+  - Dynamic evaluation in both product filtering (`/products?low_stock=1`) and dashboard metrics.
+- **Streaming CSV Export:**
+  - High-performance memory-efficient streaming export: `GET /reports/inventory/export` and `GET /products/export`.
+  - Constant $O(1)$ memory consumption using `response()->streamDownload()` and Eloquent's lazy `cursor()`.
+  - Includes UTF-8 BOM encoding for seamless Microsoft Excel and Google Sheets compatibility.
+- **Database Performance Indexing:**
+  - Composite indexes `(deleted_at, status)` and `(deleted_at, created_at)` on products.
+  - Column indexes on `price` and `stock` on products.
+  - Composite index `(deleted_at, is_active)` and index on `name` on categories.
+- **Dashboard Caching & Reactive Invalidation:**
+  - Cached dashboard KPI calculations (`Cache::remember('dashboard:stats', 3600, ...)`).
+  - Eloquent model lifecycle hooks (`saved`, `deleted`, `restored`) on `Product` and `Category` automatically invalidate the cache upon any mutation.
+- **Code Quality & CI:**
+  - Laravel Pint (`composer lint`, `composer format`).
+  - Larastan static analysis at Level 5 (`composer analyse`).
+  - GitHub Actions CI running style checks, static analysis, security audits, and automated test coverage reporting on MySQL 8.
+- **Docker Containerization:**
+  - Complete Docker environment with PHP 8.4-cli and MySQL 8.0.
+
+---
+
+## Running with Docker
+
+You can run the entire API and database without installing PHP, Composer, or MySQL locally:
+
+```bash
+# 1. Prepare environment and build containers
+cp .env.example .env
+docker compose up -d --build
+
+# 2. Generate application key
+docker compose exec app php artisan key:generate
+
+# 3. Run database migrations and seed demo data
+docker compose exec app php artisan migrate --seed
+```
+
+- API Base URL: `http://localhost:8000/api/v1`
+- Interactive API Documentation: `http://localhost:8000/docs/api`
+
+### Running Tests in Docker
+
+```bash
+# Run tests against the isolated test database (inventory_dashboard_test)
+docker compose exec -e DB_HOST=db app php artisan test
+```
+
+### Stopping Docker
+
+```bash
+docker compose down
+```
+
+---
+
+## Running Locally (Without Docker)
+
+### Prerequisites
+- PHP 8.4+ with extensions: `pdo_mysql`, `mbstring`, `bcmath`, `zip`, `pcntl`
+- Composer 2+
+- MySQL 8.0+
 
 ```bash
 git clone https://github.com/hanineeeeee/inventory-dashboard-api.git
@@ -34,164 +123,110 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-Create two empty MySQL databases: `inventory_dashboard` for development and `inventory_dashboard_test` for the tests (see [Tests](#tests)). Put the first one's name and your credentials in `.env`, then:
+Configure your MySQL credentials in `.env`, create two databases (`inventory_dashboard` and `inventory_dashboard_test`), then run:
 
 ```bash
 php artisan migrate --seed
 php artisan serve
 ```
 
-The API runs at `http://localhost:8000/api/v1`. The seeder creates two users for local use:
+### Seeded Credentials
 
-| Role  | Email               | Password   |
-|-------|---------------------|------------|
-| Admin | admin@example.com   | password   |
-| Staff | staff@example.com   | password   |
+| Role  | Email             | Password | Permissions |
+|-------|-------------------|----------|-------------|
+| Admin | admin@example.com | password | Full access (CRUD, soft delete, restore, user registration) |
+| Staff | staff@example.com | password | Operational access (CRUD, stock intake/adjustments, CSV export) |
 
-### Trying it out
+---
 
-Log in:
+## API Endpoints
 
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"password"}'
-```
+All routes live under `/api/v1`. All endpoints require `Authorization: Bearer <token>` except login.
 
-Use the token from the response:
+| Method    | Path                       | Access     | Description                                           |
+|-----------|----------------------------|------------|-------------------------------------------------------|
+| `POST`    | `/auth/login`              | Public     | Authenticates user, revokes prior tokens, issues new token |
+| `POST`    | `/auth/register`           | Admin only | Registers a new staff or admin user                   |
+| `POST`    | `/auth/logout`             | Auth       | Revokes the current access token                      |
+| `GET`     | `/auth/me`                 | Auth       | Returns authenticated user profile                    |
+| `GET`     | `/dashboard/stats`         | Auth       | Cached dashboard KPIs (valuation, low stock, counts)  |
+| `GET`     | `/categories`              | Auth       | Paginated categories list with product counts         |
+| `POST`    | `/categories`              | Auth       | Creates a new category (slug auto-generated)          |
+| `GET`     | `/categories/{id}`         | Auth       | Retrieves category with active products               |
+| `PUT`     | `/categories/{id}`         | Auth       | Updates category details                              |
+| `DELETE`  | `/categories/{id}`         | Admin only | Soft deletes category (requires products soft-deleted)|
+| `POST`    | `/categories/{id}/restore` | Admin only | Restores a soft-deleted category                      |
+| `GET`     | `/products`                | Auth       | Paginated products list (search, filter, sort)        |
+| `POST`    | `/products`                | Auth       | Creates product & records initial stock movement      |
+| `GET`     | `/products/{id}`           | Auth       | Retrieves product with category relation              |
+| `PUT`     | `/products/{id}`           | Auth       | Updates product & records transactional stock delta   |
+| `DELETE`  | `/products/{id}`           | Admin only | Soft deletes product                                  |
+| `POST`    | `/products/{id}/restore`   | Admin only | Restores product (requires parent category active)    |
+| `GET`     | `/products/{id}/movements` | Auth       | Paginated stock movement audit history                |
+| `GET`     | `/reports/inventory/export`| Auth       | Streams full or filtered inventory report as CSV      |
+| `GET`     | `/products/export`         | Auth       | Alias for streaming CSV export                        |
 
-```bash
-curl http://localhost:8000/api/v1/products?search=mouse&sort_by=price \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
+### Product Filter & Sort Options
 
-You can also open `/docs/api` in the browser and try the endpoints from there.
+| Query Parameter | Example Values | Purpose |
+|---|---|---|
+| `search` | `mouse`, `KEY-001` | Searches product name or SKU with SQL wildcard escaping |
+| `category_id` | `1`, `5` | Filters products belonging to a specific category |
+| `status` | `active`, `inactive` | Filters by status |
+| `low_stock` | `1` | Filters products where `stock < COALESCE(reorder_level, default_threshold)` |
+| `sort_by` | `price`, `stock`, `reorder_level`, `created_at` | Whitelisted column sort |
+| `direction` | `asc`, `desc` | Sort direction (default `desc`) |
+| `per_page` | `10`, `25`, `50` | Items per page (capped at 50) |
 
-## Endpoints
+---
 
-Everything lives under `/api/v1`. All routes need a token except `login`.
+## API Testing & Request Collections
 
-| Method    | Path               | Notes                                   |
-|-----------|--------------------|-----------------------------------------|
-| POST      | /auth/login        | Returns a token                         |
-| POST      | /auth/register     | Admin only. There is no public sign-up  |
-| POST      | /auth/logout       | Revokes the current token               |
-| GET       | /auth/me           | The logged-in user                      |
-| GET       | /dashboard/stats   | Dashboard numbers                       |
-| GET       | /categories        | Paginated, with a product count         |
-| POST      | /categories        |                                         |
-| GET       | /categories/{id}   | Includes its products                   |
-| PUT/PATCH | /categories/{id}   |                                         |
-| DELETE    | /categories/{id}   | Admin only, and the category must be empty |
-| GET       | /products          | Search, filter, sort, paginate          |
-| POST      | /products          |                                         |
-| GET       | /products/{id}     | Includes its category                   |
-| PUT/PATCH | /products/{id}     |                                         |
-| DELETE    | /products/{id}     | Admin only                              |
+The repository provides ready-to-run API request collections covering every endpoint:
 
-### Product list options
+1. **`inventory-api.http`**: Plaintext HTTP file for VS Code REST Client and JetBrains HTTP Client.
+2. **`inventory-api.postman_collection.json`**: Standard Postman collection (v2.1). Import into Postman and set the `baseUrl` variable to test immediately.
 
-| Parameter     | What it does                                                    |
-|---------------|-----------------------------------------------------------------|
-| `search`      | Matches product name or SKU                                     |
-| `category_id` | Products in one category                                        |
-| `status`      | `active` or `inactive`                                          |
-| `low_stock`   | `1` shows only products below the low-stock threshold           |
-| `sort_by`     | `id`, `name`, `sku`, `price`, `stock`, `status`, `created_at`   |
-| `direction`   | `asc` or `desc` (default `desc`)                                |
-| `per_page`    | 1 to 50 (default 10)                                            |
+---
 
-The categories list supports `sort_by` (including `products_count`), `direction`, and `per_page` the same way.
+## Interactive Documentation & Screenshots
 
-## Responses
+Interactive API documentation is generated by [Scramble](https://scramble.dedoc.co/) and available at `/docs/api`.
 
-Success:
+### Recommended Screenshots for Documentation:
+1. **API Overview & Dashboard (`/docs/api#tag/Dashboard`):**
+   Shows the dashboard statistics endpoint and standardized JSON response structure.
+   *(Save to `docs/screenshots/01-dashboard-stats.png`)*
+2. **Products & Stock Movements Ledger (`/docs/api#tag/Products`):**
+   Shows product CRUD endpoints, the stock movements audit endpoint, and soft delete restore endpoints.
+   *(Save to `docs/screenshots/02-products-movements.png`)*
+3. **CSV Export & Report Endpoints (`/docs/api#tag/Reports`):**
+   Shows the streaming CSV export parameters (`category_id`, `status`, `low_stock`) and content disposition headers.
+   *(Save to `docs/screenshots/03-csv-export.png`)*
 
-```json
-{
-  "success": true,
-  "message": "Product created successfully.",
-  "data": { "id": 1, "name": "Wireless Mouse", "sku": "ELEC-001", "price": "29.99", "stock": 50 }
-}
-```
+---
 
-Lists also include `meta` and `links` for pagination. Errors:
-
-```json
-{
-  "success": false,
-  "message": "The given data was invalid.",
-  "errors": { "sku": ["The sku has already been taken."] }
-}
-```
-
-| Status | Meaning                                              |
-|--------|------------------------------------------------------|
-| 401    | No token, a bad token, or an expired token           |
-| 403    | Logged in, but not allowed to do this                |
-| 404    | The record or the route does not exist               |
-| 409    | The category still has products                      |
-| 422    | Validation failed                                    |
-| 429    | Too many login attempts                              |
-| 500    | Unexpected error (details hidden unless `APP_DEBUG=true`) |
-
-## Decisions I made
-
-**Permissions live in policies.** Controllers call the policy instead of checking `$user->role` themselves, so the rules are in one place per model.
-
-**A category with products cannot be deleted.** At first, deleting a category also deleted all its products through `cascadeOnDelete`. That seemed dangerous, so the foreign key now uses `restrictOnDelete`, and the API returns a clear 409 message.
-
-**Slugs are generated in the model.** Two categories with the same name used to crash the app because of the unique index. Now the second one becomes `name-2`, and it works the same wherever a category is created.
-
-**Business settings are in config, not scattered in code.** The low-stock threshold was hard-coded as `5` in two places. It now lives in `config/inventory.php` and both the filter and the dashboard read from it.
-
-**Inactive products are not counted in inventory value by default.** I decided a discontinued product should not count as stock the shop can sell. This can be changed with an environment variable (see below).
-
-**Login attempts are limited by email and IP together**, so one shared network does not lock everyone out.
-
-**Errors are handled in one place** (`bootstrap/app.php`), so the API never returns an HTML page or a stack trace, whatever goes wrong.
-
-## Settings
-
-Set these in `.env`:
-
-| Variable                                | Default | Meaning                                              |
-|-----------------------------------------|---------|------------------------------------------------------|
-| `SANCTUM_EXPIRATION`                    | 1440    | How long a token lasts, in minutes                   |
-| `LOW_STOCK_THRESHOLD`                   | 5       | A product is "low" when its stock is below this      |
-| `INVENTORY_VALUATION_INCLUDES_INACTIVE` | false   | Count inactive products in total inventory value     |
-
-## Tests
+## Code Quality & Verification
 
 ```bash
+# Run code style checks (Laravel Pint)
+composer lint
+
+# Automatically format code style
+composer format
+
+# Run static analysis (Larastan Level 5)
+composer analyse
+
+# Run dependency security audit
+composer audit
+
+# Run automated test suite (MySQL isolated database)
 php artisan test
 ```
 
-The tests run on MySQL, the same database as development, so queries behave the same way in both. They use a separate database (`inventory_dashboard_test`) because every test run wipes its tables. Never point the tests at your development database. They cover login and roles, rate limiting, category and product CRUD, filters, sorting, search with special characters, validation errors, the error response format, and the dashboard numbers. GitHub Actions runs them on every push.
-
-## Folder structure
-
-```
-app/
-  Http/Controllers/Api/V1/   Auth, Category, Product, Dashboard
-  Http/Requests/             Validation rules per endpoint
-  Http/Resources/            How each model is turned into JSON
-  Models/
-  Policies/                  Who is allowed to do what
-  Traits/ApiResponseTrait.php
-bootstrap/app.php            Error handling
-config/inventory.php         Business settings
-routes/api.php
-tests/Feature/
-```
-
-## Known limitations and next steps
-
-- Stock is a single number on the product. There is no history of stock changes, so you cannot see who changed what.
-- Deleting is permanent. Soft deletes would be safer.
-- Logging in revokes all earlier tokens, which means logging in on a second device logs out the first.
-- There is no frontend. This is only the API.
+---
 
 ## License
 
-MIT
+This project is open-source software licensed under the [MIT License](LICENSE).

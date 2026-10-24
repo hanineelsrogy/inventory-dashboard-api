@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class Category extends Model
@@ -40,6 +41,18 @@ class Category extends Model
             if ($category->isDirty('name') && ! $category->isDirty('slug')) {
                 $category->slug = static::generateUniqueSlug($category->name, $category->id);
             }
+        });
+
+        static::saved(function () {
+            Cache::forget('dashboard:stats');
+        });
+
+        static::deleted(function () {
+            Cache::forget('dashboard:stats');
+        });
+
+        static::restored(function () {
+            Cache::forget('dashboard:stats');
         });
     }
 

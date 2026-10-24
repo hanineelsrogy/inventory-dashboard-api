@@ -77,6 +77,66 @@ class ProductTest extends TestCase
             ->assertJsonPath('meta.total', 2);
     }
 
+    public function test_filter_products_by_low_stock_respects_custom_reorder_level(): void
+    {
+        $user = User::factory()->create();
+
+        // 1. Custom reorder_level 15, stock 8 -> low stock (even though stock > global default 5)
+        $p1 = Product::factory()->create(['name' => 'High Threshold Item', 'stock' => 8, 'reorder_level' => 15]);
+
+        // 2. Custom reorder_level 2, stock 3 -> NOT low stock (even though stock < global default 5)
+        Product::factory()->create(['name' => 'Low Threshold Item', 'stock' => 3, 'reorder_level' => 2]);
+
+        // 3. Fallback: reorder_level null, stock 4 -> low stock (< 5)
+        $p3 = Product::factory()->create(['name' => 'Default Low Item', 'stock' => 4, 'reorder_level' => null]);
+
+        // 4. Fallback: reorder_level null, stock 10 -> NOT low stock (>= 5)
+        Product::factory()->create(['name' => 'Default High Item', 'stock' => 10, 'reorder_level' => null]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/products?low_stock=1');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.total', 2);
+
+        $returnedNames = collect($response->json('data'))->pluck('name');
+        $this->assertTrue($returnedNames->contains('High Threshold Item'));
+        $this->assertTrue($returnedNames->contains('Default Low Item'));
+        $this->assertFalse($returnedNames->contains('Low Threshold Item'));
+    }
+
+    public function test_product_can_be_created_and_updated_with_reorder_level(): void
+    {
+        $user = User::factory()->staff()->create();
+        $category = Category::factory()->create();
+
+        $createResponse = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/products', [
+                'category_id' => $category->id,
+                'name' => 'Wireless Keyboard',
+                'sku' => 'KEY-0099',
+                'price' => 59.99,
+                'stock' => 20,
+                'reorder_level' => 15,
+                'status' => 'active',
+            ]);
+
+        $createResponse->assertStatus(201)
+            ->assertJsonPath('data.reorder_level', 15);
+
+        $productId = $createResponse->json('data.id');
+
+        $updateResponse = $this->actingAs($user, 'sanctum')
+            ->putJson("/api/v1/products/{$productId}", [
+                'reorder_level' => 8,
+            ]);
+
+        $updateResponse->assertStatus(200)
+            ->assertJsonPath('data.reorder_level', 8);
+
+        $this->assertEquals(8, Product::find($productId)->reorder_level);
+    }
+
     public function test_search_escapes_sql_wildcards_percent_and_underscore(): void
     {
         $user = User::factory()->create();

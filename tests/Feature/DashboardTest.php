@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
 
@@ -96,5 +97,77 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertEquals(200.00, $response->json('data.total_inventory_value'));
+    }
+
+    public function test_dashboard_low_stock_count_respects_custom_reorder_levels(): void
+    {
+        $user = User::factory()->create();
+
+        // Product 1: stock 8, reorder_level 15 -> low stock (even though stock > global 5)
+        Product::factory()->create([
+            'stock' => 8,
+            'reorder_level' => 15,
+            'status' => 'active',
+        ]);
+
+        // Product 2: stock 3, reorder_level 2 -> NOT low stock (even though stock < global 5)
+        Product::factory()->create([
+            'stock' => 3,
+            'reorder_level' => 2,
+            'status' => 'active',
+        ]);
+
+        // Product 3: stock 4, reorder_level null -> low stock (fallback to global default 5)
+        Product::factory()->create([
+            'stock' => 4,
+            'reorder_level' => null,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboard/stats');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.low_stock_count', 2);
+    }
+
+    public function test_dashboard_stats_are_cached_and_invalidated_on_product_lifecycle(): void
+    {
+        $user = User::factory()->staff()->create();
+        $category = Category::factory()->create();
+
+        // 1. Initial request primes the cache
+        $this->assertFalse(Cache::has('dashboard:stats'));
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboard/stats');
+        $response->assertStatus(200);
+        $this->assertTrue(Cache::has('dashboard:stats'));
+
+        // 2. Creating a product invalidates the cache
+        $product = Product::factory()->create(['category_id' => $category->id]);
+        $this->assertFalse(Cache::has('dashboard:stats'));
+
+        // Re-prime cache
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboard/stats');
+        $this->assertTrue(Cache::has('dashboard:stats'));
+
+        // 3. Updating a product invalidates the cache
+        $product->update(['stock' => 99]);
+        $this->assertFalse(Cache::has('dashboard:stats'));
+
+        // Re-prime cache
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboard/stats');
+        $this->assertTrue(Cache::has('dashboard:stats'));
+
+        // 4. Soft deleting a product invalidates the cache
+        $product->delete();
+        $this->assertFalse(Cache::has('dashboard:stats'));
+
+        // Re-prime cache
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboard/stats');
+        $this->assertTrue(Cache::has('dashboard:stats'));
+
+        // 5. Restoring a product invalidates the cache
+        $product->restore();
+        $this->assertFalse(Cache::has('dashboard:stats'));
     }
 }

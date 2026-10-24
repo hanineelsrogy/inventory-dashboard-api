@@ -7,9 +7,13 @@ use App\Http\Requests\IndexProductRequest;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Http\Resources\ProductResource;
+use App\Http\Resources\StockMovementResource;
+use App\Models\Category;
 use App\Models\Product;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 class ProductController extends Controller
@@ -40,14 +44,13 @@ class ProductController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        // 4. Filter low stock from config
+        // 4. Filter low stock based on individual reorder_level or global config threshold
         if ($request->boolean('low_stock')) {
-            $threshold = (int) config('inventory.low_stock_threshold', 5);
-            $query->where('stock', '<', $threshold);
+            $query->lowStock();
         }
 
         // 5. Whitelisted sorting
-        $allowedSortColumns = ['id', 'name', 'sku', 'price', 'stock', 'status', 'created_at'];
+        $allowedSortColumns = ['id', 'name', 'sku', 'price', 'stock', 'reorder_level', 'status', 'created_at'];
         $sortBy = in_array($request->input('sort_by'), $allowedSortColumns, true)
             ? $request->input('sort_by')
             : 'created_at';
@@ -68,13 +71,31 @@ class ProductController extends Controller
     }
 
     /**
-     * Create a new product.
+     * Create a new product with an initial stock movement recorded atomically.
      */
     public function store(StoreProductRequest $request): JsonResponse
     {
         Gate::authorize('create', Product::class);
 
-        $product = Product::create($request->validated());
+        $product = DB::transaction(function () use ($request) {
+            $validated = $request->validated();
+            $productData = Arr::except($validated, ['reason']);
+            $product = Product::create($productData);
+
+            if ((int) $product->stock > 0) {
+                $product->movements()->create([
+                    'user_id' => $request->user()?->id,
+                    'change' => (int) $product->stock,
+                    'stock_before' => 0,
+                    'stock_after' => (int) $product->stock,
+                    'reason' => $validated['reason'] ?? 'Initial stock',
+                    'created_at' => now(),
+                ]);
+            }
+
+            return $product;
+        });
+
         $product->load('category');
 
         return $this->success(
@@ -100,13 +121,35 @@ class ProductController extends Controller
     }
 
     /**
-     * Update a product.
+     * Update a product, logging any stock movement inside a database transaction.
      */
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
         Gate::authorize('update', $product);
 
-        $product->update($request->validated());
+        DB::transaction(function () use ($request, $product) {
+            $validated = $request->validated();
+
+            if (array_key_exists('stock', $validated)) {
+                $oldStock = (int) $product->stock;
+                $newStock = (int) $validated['stock'];
+
+                if ($newStock !== $oldStock) {
+                    $delta = $newStock - $oldStock;
+                    $product->movements()->create([
+                        'user_id' => $request->user()?->id,
+                        'change' => $delta,
+                        'stock_before' => $oldStock,
+                        'stock_after' => $newStock,
+                        'reason' => $validated['reason'] ?? 'Stock adjustment',
+                        'created_at' => now(),
+                    ]);
+                }
+            }
+
+            $product->update(Arr::except($validated, ['reason']));
+        });
+
         $product->load('category');
 
         return $this->success(
@@ -136,7 +179,7 @@ class ProductController extends Controller
 
         Gate::authorize('restore', $product);
 
-        if ($product->category()->withTrashed()->first()?->trashed()) {
+        if (Category::withTrashed()->find($product->category_id)?->trashed()) {
             return $this->error(
                 'Cannot restore product because its category has been deleted. Restore the category first.',
                 409
@@ -149,6 +192,28 @@ class ProductController extends Controller
         return $this->success(
             new ProductResource($product),
             'Product restored successfully.'
+        );
+    }
+
+    /**
+     * Get stock movement audit trail for a product.
+     */
+    public function movements(int|string $id): JsonResponse
+    {
+        $product = Product::findOrFail($id);
+
+        Gate::authorize('view', $product);
+
+        $perPage = min(request()->integer('per_page', 15), 50);
+
+        $movements = $product->movements()
+            ->with('user')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return $this->paginated(
+            StockMovementResource::collection($movements),
+            'Stock movements retrieved successfully.'
         );
     }
 }

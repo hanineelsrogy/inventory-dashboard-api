@@ -20,7 +20,9 @@ class UpdateProductRequest extends FormRequest
             'sku' => ['sometimes', 'required', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($this->route('product'))],
             'price' => ['sometimes', 'required', 'numeric', 'min:0'],
             'stock' => ['sometimes', 'required', 'integer', 'min:0'],
+            'reorder_level' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+            'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 }

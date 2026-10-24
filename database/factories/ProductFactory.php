@@ -45,4 +45,11 @@ class ProductFactory extends Factory
             'status' => 'inactive',
         ]);
     }
+
+    public function reorderLevel(?int $level = 10): static
+    {
+        return $this->state(fn () => [
+            'reorder_level' => $level,
+        ]);
+    }
 }
